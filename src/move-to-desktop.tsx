@@ -99,12 +99,12 @@ tell application "System Events"
 end tell
 `;
 
-    const result = execSync(`osascript -e ${JSON.stringify(appleScript)}`, {
+    // Pass the AppleScript via stdin to handle multi-line scripts properly
+    const result = execSync(`osascript`, {
+      input: appleScript,
       encoding: "utf-8",
       timeout: 10000,
-    })
-      .trim()
-      .replace(/\n/g, "");
+    }).trim();
 
     if (result === "success") {
       await showToast({
