@@ -421,7 +421,7 @@ export async function authorize() {
 
 ### Branch Strategy
 
-- **Development branch**: `claude/claude-md-mhyuj9nm06vpkr7y-01Xit2sEYZxCRPqvL3LzMmUS`
+- **Development branch**: `claude/claude-md-mhyw6de0n3dfiioa-011yXQnKvMU8uB6EpBzJwMGY`
 - All development work should be done on feature branches starting with `claude/`
 
 ### Commit Message Format
@@ -458,7 +458,7 @@ Closes #123
 
 Always push to the designated branch:
 ```bash
-git push -u origin claude/claude-md-mhyuj9nm06vpkr7y-01Xit2sEYZxCRPqvL3LzMmUS
+git push -u origin claude/claude-md-mhyw6de0n3dfiioa-011yXQnKvMU8uB6EpBzJwMGY
 ```
 
 ## Resources
