@@ -71,6 +71,27 @@ tell application "System Events"
             return "success"
         end if
 
+        -- Look for "Assign To" submenu (appears in some macOS versions)
+        if exists menu item "Assign To" of theMenu then
+            click menu item "Assign To" of theMenu
+            delay 0.25
+
+            set subMenu to menu 1 of menu item "Assign To" of theMenu
+
+            -- Try different naming patterns
+            if exists menu item ("Desktop " & targetDesktop) of subMenu then
+                click menu item ("Desktop " & targetDesktop) of subMenu
+                return "success"
+            else if exists menu item (targetDesktop as string) of subMenu then
+                click menu item (targetDesktop as string) of subMenu
+                return "success"
+            end if
+
+            -- Close submenu if desktop not found
+            key code 53
+            return "error:desktop_not_in_menu"
+        end if
+
         -- Check for "Move to" submenu
         if exists menu item "Move to" of theMenu then
             click menu item "Move to" of theMenu
@@ -92,9 +113,17 @@ tell application "System Events"
             return "error:desktop_not_in_menu"
         end if
 
-        -- Close menu if no "Move to" option
+        -- Debug: List what's actually in the menu
+        set menuItemsList to ""
+        repeat with menuItem in menu items of theMenu
+            try
+                set menuItemsList to menuItemsList & (name of menuItem) & ", "
+            end try
+        end repeat
+
+        -- Close menu if no "Move to" or "Assign To" option
         key code 53
-        return "error:no_move_option"
+        return "error:no_move_option|" & menuItemsList
     end tell
 end tell
 `;
@@ -138,15 +167,21 @@ To fix:
 1. Create Desktop ${desktopNum}: Mission Control (F3) → hover top-right → click +
 2. Or assign the window to an existing desktop from the Window menu`,
       });
-    } else if (result === "error:no_move_option") {
+    } else if (result.startsWith("error:no_move_option")) {
+      // Parse debug info if available
+      const parts = result.split("|");
+      const menuItems = parts.length > 1 ? parts[1] : "unknown";
+
       await showToast({
         style: Toast.Style.Failure,
         title: "Move Option Not Found",
-        message: `This app's Window menu doesn't have "Move to" option.
+        message: `Window menu items found: ${menuItems}
 
-Try manually:
-1. Open Mission Control (F3)
-2. Drag window to Desktop ${desktopNum}`,
+This likely means:
+1. Mission Control settings need adjustment:
+   System Settings → Desktop & Dock → Mission Control
+   → Enable "Displays have separate Spaces"
+2. Or manually move: Open Mission Control (F3) → Drag window to Desktop ${desktopNum}`,
       });
     } else {
       // Unknown error - show the actual result for debugging
