@@ -1,8 +1,8 @@
 {
   "$schema": "https://www.raycast.com/schemas/extension.json",
-  "name": "window-display-mover",
-  "title": "Window Display Mover",
-  "description": "Move active windows between displays with simple commands",
+  "name": "window-desktop-mover",
+  "title": "Window Desktop Mover",
+  "description": "Move active windows between desktops (Spaces) with simple commands",
   "icon": "extension-icon.png",
   "author": "napalias",
   "categories": [
@@ -12,14 +12,14 @@
   "license": "MIT",
   "commands": [
     {
-      "name": "move-to-display",
-      "title": "Move to Display",
-      "description": "Move the active window to a specific display",
+      "name": "move-to-desktop",
+      "title": "Move to Desktop",
+      "description": "Move the active window to a specific desktop (Space)",
       "mode": "no-view",
       "arguments": [
         {
-          "name": "displayNumber",
-          "placeholder": "Display Number",
+          "name": "desktopNumber",
+          "placeholder": "Desktop Number",
           "type": "text",
           "required": true
         }

@@ -1,10 +1,12 @@
-# Window Display Mover Extension - Implementation Plan
+# Window Desktop Mover Extension - Implementation Plan
 
 ## Project Overview
 
-**Extension Name**: Window Display Mover
-**Purpose**: Move the current active window to a specified display using a simple Raycast command
-**Command Format**: `display [Virtual Display Number]`
+**Extension Name**: Window Desktop Mover
+**Purpose**: Move the current active window to a specified desktop (Space) using a simple Raycast command
+**Command Format**: `desktop [Desktop Number]`
+
+**UPDATE (2025-11-14)**: Changed from moving windows between displays to moving windows between desktops/Spaces based on user requirements.
 
 ## Language & Technology Stack
 
