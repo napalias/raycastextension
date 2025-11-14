@@ -102,7 +102,9 @@ end tell
     const result = execSync(`osascript -e ${JSON.stringify(appleScript)}`, {
       encoding: "utf-8",
       timeout: 10000,
-    }).trim();
+    })
+      .trim()
+      .replace(/\n/g, "");
 
     if (result === "success") {
       await showToast({
@@ -147,24 +149,53 @@ Try manually:
 2. Drag window to Desktop ${desktopNum}`,
       });
     } else {
-      throw new Error(result);
+      // Unknown error - show the actual result for debugging
+      await showToast({
+        style: Toast.Style.Failure,
+        title: "Unknown Error",
+        message: `AppleScript returned: ${result}
+
+Please report this issue with details about:
+- Which app you were moving
+- Your macOS version
+- Whether Desktop ${desktopNum} exists`,
+      });
     }
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : String(error);
 
+    console.error("Move failed with error:", errorMessage);
+
     let userMessage = errorMessage;
+    let title = "Move Failed";
 
-    if (errorMessage.toLowerCase().includes("accessibility") || errorMessage.toLowerCase().includes("not authorized")) {
-      userMessage = `Accessibility permission required.
+    if (
+      errorMessage.toLowerCase().includes("accessibility") ||
+      errorMessage.toLowerCase().includes("not authorized") ||
+      errorMessage.toLowerCase().includes("not allowed assistive")
+    ) {
+      title = "Accessibility Permission Required";
+      userMessage = `Raycast needs Accessibility permission to move windows.
 
-Enable for Raycast:
-System Settings → Privacy & Security → Accessibility → Add Raycast`;
+Enable it:
+System Settings → Privacy & Security → Accessibility → Enable Raycast`;
+    } else if (errorMessage.toLowerCase().includes("connection is invalid")) {
+      title = "App Not Available";
+      userMessage = "The frontmost app is not available or has no windows.";
+    } else {
+      // Show the full error for debugging
+      userMessage = `Error: ${errorMessage}
+
+Trying to move window to Desktop ${desktopNum}. Make sure:
+1. Desktop ${desktopNum} exists (check Mission Control)
+2. The app has a Window menu
+3. Raycast has Accessibility permissions`;
     }
 
     await showToast({
       style: Toast.Style.Failure,
-      title: "Move Failed",
+      title: title,
       message: userMessage,
     });
   }
