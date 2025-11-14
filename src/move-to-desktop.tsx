@@ -1,5 +1,8 @@
 import { showToast, Toast, LaunchProps } from "@raycast/api";
-import { runAppleScript } from "@raycast/utils";
+import { execFileSync } from "child_process";
+import { writeFileSync, unlinkSync } from "fs";
+import { tmpdir } from "os";
+import { join } from "path";
 
 interface Arguments {
   desktopNumber: string;
@@ -10,113 +13,238 @@ export default async function Command(
 ) {
   const { desktopNumber } = props.arguments;
 
+  // Validate desktop number
+  const desktopNum = parseInt(desktopNumber, 10);
+  if (isNaN(desktopNum) || desktopNum < 1) {
+    await showToast({
+      style: Toast.Style.Failure,
+      title: "Invalid Desktop Number",
+      message: "Please enter a valid desktop number (1, 2, 3, etc.)",
+    });
+    return;
+  }
+
   try {
-    // Validate desktop number
-    const desktopNum = parseInt(desktopNumber, 10);
-    if (isNaN(desktopNum) || desktopNum < 1) {
-      await showToast({
-        style: Toast.Style.Failure,
-        title: "Invalid Desktop Number",
-        message: "Please enter a valid desktop number (1, 2, 3, etc.)",
-      });
-      return;
+
+    await showToast({
+      style: Toast.Style.Animated,
+      title: "Moving Window",
+      message: `Moving to Desktop ${desktopNum}...`,
+    });
+
+    // JXA (JavaScript for Automation) script to move window to a specific Space
+    // This uses Mission Control UI scripting since macOS doesn't provide a direct API
+    const jxaScript = `
+#!/usr/bin/env osascript -l JavaScript
+
+function run(argv) {
+  // Import Cocoa framework for cursor manipulation
+  ObjC.import('Cocoa');
+  const App = Application.currentApplication();
+  App.includeStandardAdditions = true;
+
+  // Cursor manipulation helper
+  const Cursor = {
+    __events: {
+      button: {
+        left: {
+          drag: $.kCGEventLeftMouseDragged,
+          down: $.kCGEventLeftMouseDown,
+          up: $.kCGEventLeftMouseUp,
+        },
+      },
+      move: $.kCGEventMouseMoved,
+    },
+    __eventFactory(type, pos) {
+      var event = $.CGEventCreateMouseEvent(
+        $(),
+        type,
+        pos,
+        $.kCGMouseButtonLeft,
+      );
+      $.CGEventPost($.kCGHIDEventTap, event);
+      delay(0.01);
+    },
+    get position() {
+      const screenH = $.NSScreen.mainScreen.frame.size.height;
+      const pos = $.NSEvent.mouseLocation;
+      return [
+        parseInt(pos.x),
+        screenH - Math.trunc(pos.y),
+      ];
+    },
+    get x() {
+      return Cursor.position[0];
+    },
+    get y() {
+      return Cursor.position[1];
+    },
+    leftButton: {
+      down([x = Cursor.x, y = Cursor.y]) {
+        Cursor.__eventFactory(Cursor.__events.button.left.down, { x, y });
+      },
+      up([x = Cursor.x, y = Cursor.y]) {
+        Cursor.__eventFactory(Cursor.__events.button.left.up, { x, y });
+      },
+      click([x = Cursor.x, y = Cursor.y]) {
+        Cursor.leftButton.down([x, y]);
+        Cursor.leftButton.up([x, y]);
+      },
+    },
+    drag([x, y], from = [Cursor.x, Cursor.y]) {
+      Cursor.leftButton.down(from);
+      Cursor.__eventFactory(Cursor.__events.button.left.drag, { x, y });
+      delay(0.5);
+      Cursor.leftButton.up([x, y]);
+    },
+    move([x, y]) {
+      Cursor.__eventFactory(Cursor.__events.move, { x, y });
+    },
+  };
+
+  // Get frontmost application and window
+  const FrontmostApp = () =>
+    Application('System Events').applicationProcesses.whose({
+      frontmost: true,
+    })()[0];
+
+  const FrontmostWindow = () => FrontmostApp().windows.at(0);
+
+  // Get position of desktop broker in Mission Control
+  const DesktopBrokerPosition = (desktop) => {
+    // Jiggle cursor at top to reveal desktop brokers
+    const restore = Cursor.position;
+    Cursor.move([10, 10]);
+    Cursor.move([20, 10]);
+    Cursor.move(restore);
+
+    try {
+      return Application('System Events')
+        .applicationProcesses.byName('Dock')
+        .groups.byName('Mission Control')
+        .groups.at(0)
+        .groups.byName('Spaces Bar')
+        .lists.at(0)
+        .buttons.byName(\`Desktop \${desktop}\`)
+        .properties().position;
+    } catch (e) {
+      throw new Error(\`Desktop \${desktop} not found. Please ensure you have \${desktop} or more virtual desktops configured in Mission Control.\`);
+    }
+  };
+
+  // Get position of window broker in Mission Control
+  const WindowBrokerPosition = (windowTitle) => {
+    try {
+      return Application('System Events')
+        .applicationProcesses.byName('Dock')
+        .groups.byName('Mission Control')
+        .groups.at(0)
+        .groups.at(0)
+        .buttons.byName(windowTitle)
+        .properties().position;
+    } catch (e) {
+      throw new Error(\`Window "\${windowTitle}" not found in Mission Control.\`);
+    }
+  };
+
+  // Main script execution
+  try {
+    const targetDesktop = ${desktopNum};
+
+    // Check if there's a frontmost window
+    const frontApp = FrontmostApp();
+    if (!frontApp) {
+      throw new Error('No active application found');
     }
 
-    // AppleScript to move window to a specific desktop (Space)
-    const script = `
-      use framework "Foundation"
-      use scripting additions
+    const windows = frontApp.windows();
+    if (windows.length === 0) {
+      throw new Error('No active window found');
+    }
 
-      tell application "System Events"
-        -- Get frontmost application
-        set frontApp to name of first application process whose frontmost is true
+    // Store window title and cursor position
+    const windowTitle = FrontmostWindow().title();
+    const restoreCursor = Cursor.position;
 
-        tell process frontApp
-          if (count of windows) = 0 then
-            return "Error: No active window found"
-          end if
+    // Launch Mission Control
+    Application('Mission Control').launch();
+    delay(0.5);
 
-          -- Get the frontmost window
-          set theWindow to window 1
+    // Get positions
+    const [desktopX, desktopY] = DesktopBrokerPosition(targetDesktop);
+    const [windowX, windowY] = WindowBrokerPosition(windowTitle);
 
-          -- Try to move window to desktop using Window menu
-          try
-            -- Click on Window menu if it exists
-            tell menu bar 1
-              try
-                set windowMenu to menu "Window" of menu bar item "Window"
-              on error
-                return "Error: This application does not support moving windows to desktops via Window menu"
-              end try
+    // Move cursor to top to ensure Spaces bar is visible
+    Cursor.move([10, 10]);
 
-              try
-                -- Look for "Move to" submenu
-                set moveToMenu to menu "Move to" of menu item "Move to" of windowMenu
+    // Jiggle cursor over window broker to activate it
+    Cursor.move([windowX + 30, windowY + 30]);
+    delay(0.2);
+    Cursor.move([windowX + 40, windowY + 40]);
+    delay(0.2);
+    Cursor.move([windowX + 30, windowY + 30]);
 
-                -- Get all menu items (desktops)
-                set desktopMenuItems to menu items of moveToMenu
+    // Drag window to target desktop
+    Cursor.drag([desktopX + 10, desktopY + 10], [windowX + 30, windowY + 30]);
+    delay(0.5);
 
-                -- Check if desktop exists
-                if ${desktopNum} > (count of desktopMenuItems) then
-                  return "Error: Desktop ${desktopNum} not found. Available desktops: 1 to " & (count of desktopMenuItems)
-                end if
+    // Click target desktop to switch focus
+    Cursor.leftButton.click([desktopX + 10, desktopY + 10]);
 
-                -- Click on the target desktop
-                click menu item ${desktopNum} of moveToMenu
+    // Restore cursor position
+    Cursor.move(restoreCursor);
 
-                return "Success: Window moved to Desktop ${desktopNum}"
-              on error errMsg
-                return "Error: Could not access Move to menu - " & errMsg
-              end try
-            end tell
-          on error errMsg
-            -- If Window menu approach fails, try keyboard shortcut approach
-            try
-              -- Activate the window first
-              set frontmost to true
+    return 'Success';
+  } catch (error) {
+    // Exit Mission Control if it's still open
+    try {
+      Application('System Events').keyCode(53); // ESC key
+    } catch (e) {}
 
-              -- Use Control+Number to switch to desktop and bring window
-              -- This requires "Displays have separate Spaces" to be disabled
-              -- and keyboard shortcuts to be enabled in System Preferences
+    throw error;
+  }
+}
+`;
 
-              -- First, we'll try using Mission Control shortcuts
-              tell application "System Events"
-                -- Press Control+Desktop Number to move to that desktop with the window
-                key code (18 + ${desktopNum - 1}) using control down
-              end tell
+    // Write JXA script to temporary file
+    const tmpFile = join(tmpdir(), `move-window-${Date.now()}.jxa`);
+    writeFileSync(tmpFile, jxaScript);
 
-              delay 0.3
-
-              return "Success: Switched to Desktop ${desktopNum} with window"
-            on error errMsg2
-              return "Error: Unable to move window. Please enable Mission Control keyboard shortcuts in System Preferences → Keyboard → Shortcuts → Mission Control. Error: " & errMsg2
-            end try
-          end try
-        end tell
-      end tell
-    `;
-
-    const result = await runAppleScript(script);
-
-    if (result.includes("Error:")) {
-      await showToast({
-        style: Toast.Style.Failure,
-        title: "Failed to Move Window",
-        message: result.replace("Error: ", ""),
+    try {
+      // Execute JXA script
+      execFileSync("osascript", ["-l", "JavaScript", tmpFile], {
+        encoding: "utf-8",
+        timeout: 10000,
       });
-    } else {
+
       await showToast({
         style: Toast.Style.Success,
         title: "Window Moved",
-        message: `Moved to Desktop ${desktopNum}`,
+        message: `Successfully moved to Desktop ${desktopNum}`,
       });
+    } finally {
+      // Clean up temporary file
+      try {
+        unlinkSync(tmpFile);
+      } catch (e) {
+        // Ignore cleanup errors
+      }
     }
   } catch (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error occurred";
+
+    let userMessage = errorMessage;
+    if (errorMessage.includes("not found")) {
+      userMessage = `Desktop ${desktopNum} not found. Please ensure you have ${desktopNum} or more virtual desktops configured in Mission Control (System Settings → Desktop & Dock → Mission Control).`;
+    } else if (errorMessage.includes("No active window")) {
+      userMessage = "No active window found to move.";
+    }
+
     await showToast({
       style: Toast.Style.Failure,
       title: "Failed to Move Window",
-      message:
-        error instanceof Error ? error.message : "Unknown error occurred",
+      message: userMessage,
     });
   }
 }

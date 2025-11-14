@@ -7,8 +7,8 @@ Move your active window to any desktop (Space) with a simple command.
 - 🖥️ Move windows between desktops (Spaces) instantly
 - ⚡ Simple command: just type `desktop [number]`
 - ✅ Works with all macOS applications
-- 🎯 Smart fallback: tries Window menu first, then keyboard shortcuts
-- 🔓 No Raycast Pro required (uses AppleScript)
+- 🎯 Uses Mission Control UI scripting for reliable window movement
+- 🔓 No Raycast Pro required (uses JXA - JavaScript for Automation)
 
 ## Usage
 
@@ -54,19 +54,14 @@ On first use, macOS may request the following permissions:
 
 ## Setup
 
-This extension uses two methods to move windows:
+This extension uses Mission Control UI scripting to move windows between desktops (Spaces).
 
-### Method 1: Window Menu (Primary)
-Works with most applications that have a "Window → Move to" menu. No additional setup required.
+**No additional setup required!** The extension will:
+1. Automatically detect your virtual desktops
+2. Use Mission Control to drag and drop the window to the target desktop
+3. Switch to the target desktop after moving the window
 
-### Method 2: Keyboard Shortcuts (Fallback)
-If the Window menu approach fails, the extension will attempt to use Mission Control keyboard shortcuts.
-
-**To enable keyboard shortcuts:**
-1. Go to System Settings → Keyboard → Keyboard Shortcuts
-2. Select "Mission Control" from the sidebar
-3. Enable "Switch to Desktop 1", "Switch to Desktop 2", etc.
-4. Ensure shortcuts are set to ^1, ^2, ^3, etc. (Control + number)
+**Note:** Ensure you have multiple desktops configured in Mission Control (F3 or swipe up with three fingers, then click "+" to add desktops)
 
 ## Installation
 
@@ -104,10 +99,6 @@ npm run dev
 - **Cause**: You entered a non-numeric value or zero/negative number
 - **Solution**: Enter a valid positive number (1, 2, 3, etc.)
 
-### "This application does not support moving windows to desktops via Window menu"
-- **Cause**: The active application doesn't have a Window menu or "Move to" submenu
-- **Solution**: The extension will automatically fall back to keyboard shortcuts. Ensure Mission Control shortcuts are enabled (see Setup section above)
-
 ### "Permission denied" or "Not authorized"
 - **Cause**: macOS accessibility permissions not granted
 - **Solution**:
@@ -115,35 +106,40 @@ npm run dev
   2. Ensure Raycast is checked
   3. Restart Raycast if needed
 
-### "Unable to move window. Please enable Mission Control keyboard shortcuts"
-- **Cause**: Both Window menu and keyboard shortcuts failed
+### Window doesn't move / Extension seems stuck
+- **Cause**: Mission Control UI timing or cursor position issues
 - **Solution**:
-  1. Enable Mission Control keyboard shortcuts in System Settings → Keyboard → Keyboard Shortcuts → Mission Control
-  2. Ensure you have multiple desktops created in Mission Control
-  3. Some applications may not support window movement between desktops
+  1. Ensure Mission Control is not already open
+  2. Try running the command again
+  3. Close any fullscreen windows (they can't be moved between desktops)
+  4. Make sure you have the target desktop already created in Mission Control
 
 ## Technical Details
 
 ### Implementation
-This extension uses AppleScript with a dual-approach strategy:
+This extension uses **JXA (JavaScript for Automation)** with Mission Control UI scripting:
 
-**Primary Method (Window Menu):**
+**How it works:**
 1. Detects the frontmost application and window using System Events
-2. Accesses the application's Window menu via UI scripting
-3. Navigates to "Move to" submenu and clicks the target desktop
-4. Provides reliable window movement for applications with Window menus
+2. Launches Mission Control to reveal all desktops and window thumbnails
+3. Uses Core Graphics APIs to manipulate the cursor programmatically
+4. Locates the window thumbnail and target desktop button in Mission Control
+5. Simulates dragging the window thumbnail to the target desktop
+6. Clicks the target desktop to switch focus
+7. Restores the original cursor position
 
-**Fallback Method (Keyboard Shortcuts):**
-1. Uses Mission Control keyboard shortcuts (Control + number)
-2. Simulates key presses to switch to the target desktop
-3. Brings the active window along with the switch
-4. Works when Window menu is unavailable
+**Key Technologies:**
+- **JXA**: JavaScript for Automation with Objective-C bridge
+- **Core Graphics**: Native cursor manipulation via `CGEvent` APIs
+- **Mission Control UI Scripting**: Accessing Dock's Mission Control interface elements
+- **System Events**: Window and application detection
 
-### Why AppleScript?
-- Universal compatibility (no Raycast Pro required)
-- Reliable access to macOS window management via UI scripting
-- Native support for Mission Control and Spaces
-- Works with all standard macOS applications
+### Why JXA Instead of AppleScript?
+- **Direct API Access**: JXA provides access to Objective-C frameworks (Cocoa, Core Graphics)
+- **Cursor Control**: Can programmatically move and click the mouse, which AppleScript cannot do reliably
+- **Mission Control Integration**: Only way to interact with Mission Control's UI elements programmatically
+- **Universal Compatibility**: Works with all macOS applications, regardless of menu structure
+- **No Setup Required**: Doesn't depend on keyboard shortcuts or application-specific menus
 
 ## Development
 
@@ -181,11 +177,12 @@ raycastextension/
 
 ## Known Limitations
 
-- Fullscreen windows cannot be moved between desktops (macOS limitation)
-- Some system dialogs cannot be moved (security restriction)
-- Desktop numbers are based on left-to-right ordering in Mission Control
-- Some applications without Window menu support require keyboard shortcuts to be enabled
-- The window menu approach may vary slightly between different applications
+- **Fullscreen windows** cannot be moved between desktops (macOS limitation)
+- **Some system dialogs** cannot be moved (security restriction)
+- **Desktop numbers** are based on left-to-right ordering in Mission Control
+- **Cursor manipulation**: The extension temporarily moves your cursor (it's restored afterward)
+- **Timing sensitive**: Uses delays for Mission Control animations (usually 0.5-1 second total)
+- **Window titles**: Windows with very long or special characters in titles may require additional handling
 
 ## Future Enhancements
 
