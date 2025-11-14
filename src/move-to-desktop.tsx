@@ -31,10 +31,11 @@ export default async function Command(
       message: `Moving to Desktop ${desktopNum}...`,
     });
 
-    // Ultra-simple AppleScript that uses Window menu with clear error reporting
+    // Use Window menu to move to virtual desktop (Space)
+    // This is the native macOS method for moving windows between Spaces
     const appleScript = `
 tell application "System Events"
-    -- Get frontmost application
+    -- Get frontmost application and window
     set frontApp to first application process whose frontmost is true
     set appName to name of frontApp
 
@@ -45,47 +46,55 @@ tell application "System Events"
 
     set targetDesktop to ${desktopNum}
 
-    -- Try Window menu approach
+    -- Use Window menu to move to desktop
     tell process appName
-        if exists menu bar item "Window" of menu bar 1 then
-            click menu bar item "Window" of menu bar 1
-            delay 0.4
+        set frontmost to true
+        delay 0.1
 
-            -- Look for direct menu item
-            set menuItemFound to false
-            set theMenu to menu "Window" of menu bar item "Window" of menu bar 1
+        -- Check if Window menu exists
+        if not (exists menu bar item "Window" of menu bar 1) then
+            return "error:no_window_menu"
+        end if
 
-            -- Try exact match first
-            repeat with menuItemName in {"Move to Desktop " & targetDesktop, "Desktop " & targetDesktop}
-                if exists menu item menuItemName of theMenu then
-                    click menu item menuItemName of theMenu
-                    return "success"
-                end if
-            end repeat
+        -- Open Window menu
+        click menu bar item "Window" of menu bar 1
+        delay 0.3
 
-            -- Look for "Move to" submenu
-            if exists menu item "Move to" of theMenu then
-                click menu item "Move to" of theMenu
-                delay 0.3
+        set theMenu to menu "Window" of menu bar item "Window" of menu bar 1
 
-                -- Try to click on the desktop item in submenu
-                try
-                    click menu item ("Desktop " & targetDesktop) of menu 1 of menu item "Move to" of theMenu
-                    return "success"
-                on error
-                    try
-                        click menu item (targetDesktop as string) of menu 1 of menu item "Move to" of theMenu
-                        return "success"
-                    end try
-                end try
+        -- Try different menu item patterns (varies by macOS version)
+        -- Sonoma/Sequoia: "Move Window to Desktop X"
+        -- Earlier: "Desktop X" directly or under "Move to" submenu
+
+        if exists menu item ("Move Window to Desktop " & targetDesktop) of theMenu then
+            click menu item ("Move Window to Desktop " & targetDesktop) of theMenu
+            return "success"
+        end if
+
+        -- Check for "Move to" submenu
+        if exists menu item "Move to" of theMenu then
+            click menu item "Move to" of theMenu
+            delay 0.25
+
+            set subMenu to menu 1 of menu item "Move to" of theMenu
+
+            -- Try different naming patterns
+            if exists menu item ("Desktop " & targetDesktop) of subMenu then
+                click menu item ("Desktop " & targetDesktop) of subMenu
+                return "success"
+            else if exists menu item (targetDesktop as string) of subMenu then
+                click menu item (targetDesktop as string) of subMenu
+                return "success"
             end if
 
-            -- Menu items not found, close menu
+            -- Close submenu if desktop not found
             key code 53
-            return "error:menu_not_found"
-        else
-            return "error:no_menu"
+            return "error:desktop_not_in_menu"
         end if
+
+        -- Close menu if no "Move to" option
+        key code 53
+        return "error:no_move_option"
     end tell
 end tell
 `;
@@ -105,28 +114,37 @@ end tell
       await showToast({
         style: Toast.Style.Failure,
         title: "No Window Found",
-        message: "Please focus a window first and try again",
+        message: "The frontmost app has no windows to move",
       });
-    } else if (result === "error:no_menu") {
+    } else if (result === "error:no_window_menu") {
       await showToast({
         style: Toast.Style.Failure,
-        title: "Window Menu Not Available",
+        title: "No Window Menu",
         message: `This app doesn't have a Window menu.
 
-Alternative: Manually drag the window to Desktop ${desktopNum}:
-1. Open Mission Control (F3)
+Try manually:
+1. Open Mission Control (swipe up with 3-4 fingers or press F3)
 2. Drag the window to Desktop ${desktopNum} at the top`,
       });
-    } else if (result === "error:menu_not_found") {
+    } else if (result === "error:desktop_not_in_menu") {
       await showToast({
         style: Toast.Style.Failure,
-        title: "Desktop Not in Menu",
-        message: `Desktop ${desktopNum} not found in Window menu.
+        title: "Desktop Not Available",
+        message: `Desktop ${desktopNum} is not in the Window menu.
 
-Possible reasons:
-• You may not have ${desktopNum} desktops configured
-• The app may not support window movement
-• Try manually: Mission Control (F3) → Drag window to Desktop ${desktopNum}`,
+To fix:
+1. Create Desktop ${desktopNum}: Mission Control (F3) → hover top-right → click +
+2. Or assign the window to an existing desktop from the Window menu`,
+      });
+    } else if (result === "error:no_move_option") {
+      await showToast({
+        style: Toast.Style.Failure,
+        title: "Move Option Not Found",
+        message: `This app's Window menu doesn't have "Move to" option.
+
+Try manually:
+1. Open Mission Control (F3)
+2. Drag window to Desktop ${desktopNum}`,
       });
     } else {
       throw new Error(result);
