@@ -31,8 +31,8 @@ export default async function Command(
       message: `Moving to Desktop ${desktopNum}...`,
     });
 
-    // Use Window menu to move to virtual desktop (Space)
-    // This is the native macOS method for moving windows between Spaces
+    // Use keyboard shortcuts to move window to virtual desktop
+    // This requires Mission Control keyboard shortcuts to be enabled
     const appleScript = `
 tell application "System Events"
     -- Get frontmost application and window
@@ -46,85 +46,33 @@ tell application "System Events"
 
     set targetDesktop to ${desktopNum}
 
-    -- Use Window menu to move to desktop
+    -- Make sure the app is frontmost
     tell process appName
         set frontmost to true
-        delay 0.1
-
-        -- Check if Window menu exists
-        if not (exists menu bar item "Window" of menu bar 1) then
-            return "error:no_window_menu"
-        end if
-
-        -- Open Window menu
-        click menu bar item "Window" of menu bar 1
-        delay 0.3
-
-        set theMenu to menu "Window" of menu bar item "Window" of menu bar 1
-
-        -- Try different menu item patterns (varies by macOS version)
-        -- Sonoma/Sequoia: "Move Window to Desktop X"
-        -- Earlier: "Desktop X" directly or under "Move to" submenu
-
-        if exists menu item ("Move Window to Desktop " & targetDesktop) of theMenu then
-            click menu item ("Move Window to Desktop " & targetDesktop) of theMenu
-            return "success"
-        end if
-
-        -- Look for "Assign To" submenu (appears in some macOS versions)
-        if exists menu item "Assign To" of theMenu then
-            click menu item "Assign To" of theMenu
-            delay 0.25
-
-            set subMenu to menu 1 of menu item "Assign To" of theMenu
-
-            -- Try different naming patterns
-            if exists menu item ("Desktop " & targetDesktop) of subMenu then
-                click menu item ("Desktop " & targetDesktop) of subMenu
-                return "success"
-            else if exists menu item (targetDesktop as string) of subMenu then
-                click menu item (targetDesktop as string) of subMenu
-                return "success"
-            end if
-
-            -- Close submenu if desktop not found
-            key code 53
-            return "error:desktop_not_in_menu"
-        end if
-
-        -- Check for "Move to" submenu
-        if exists menu item "Move to" of theMenu then
-            click menu item "Move to" of theMenu
-            delay 0.25
-
-            set subMenu to menu 1 of menu item "Move to" of theMenu
-
-            -- Try different naming patterns
-            if exists menu item ("Desktop " & targetDesktop) of subMenu then
-                click menu item ("Desktop " & targetDesktop) of subMenu
-                return "success"
-            else if exists menu item (targetDesktop as string) of subMenu then
-                click menu item (targetDesktop as string) of subMenu
-                return "success"
-            end if
-
-            -- Close submenu if desktop not found
-            key code 53
-            return "error:desktop_not_in_menu"
-        end if
-
-        -- Debug: List what's actually in the menu
-        set menuItemsList to ""
-        repeat with menuItem in menu items of theMenu
-            try
-                set menuItemsList to menuItemsList & (name of menuItem) & ", "
-            end try
-        end repeat
-
-        -- Close menu if no "Move to" or "Assign To" option
-        key code 53
-        return "error:no_move_option|" & menuItemsList
     end tell
+
+    delay 0.2
+
+    -- Use keyboard shortcut: Control + Option + Desktop Number
+    -- This requires "Move window to Desktop X" to be enabled in:
+    -- System Settings → Keyboard → Keyboard Shortcuts → Mission Control
+
+    -- Key codes for numbers: 1=18, 2=19, 3=20, 4=21, 5=23, 6=22, 7=26, 8=28, 9=25
+    set keyCodes to {18, 19, 20, 21, 23, 22, 26, 28, 25}
+
+    if targetDesktop ≥ 1 and targetDesktop ≤ 9 then
+        set theKeyCode to item targetDesktop of keyCodes
+
+        -- Press Control + Option + Number to move window
+        tell application "System Events"
+            key code theKeyCode using {control down, option down}
+        end tell
+
+        delay 0.3
+        return "success"
+    else
+        return "error:invalid_desktop"
+    end if
 end tell
 `;
 
@@ -147,53 +95,29 @@ end tell
         title: "No Window Found",
         message: "The frontmost app has no windows to move",
       });
-    } else if (result === "error:no_window_menu") {
+    } else if (result === "error:invalid_desktop") {
       await showToast({
         style: Toast.Style.Failure,
-        title: "No Window Menu",
-        message: `This app doesn't have a Window menu.
-
-Try manually:
-1. Open Mission Control (swipe up with 3-4 fingers or press F3)
-2. Drag the window to Desktop ${desktopNum} at the top`,
-      });
-    } else if (result === "error:desktop_not_in_menu") {
-      await showToast({
-        style: Toast.Style.Failure,
-        title: "Desktop Not Available",
-        message: `Desktop ${desktopNum} is not in the Window menu.
-
-To fix:
-1. Create Desktop ${desktopNum}: Mission Control (F3) → hover top-right → click +
-2. Or assign the window to an existing desktop from the Window menu`,
-      });
-    } else if (result.startsWith("error:no_move_option")) {
-      // Parse debug info if available
-      const parts = result.split("|");
-      const menuItems = parts.length > 1 ? parts[1] : "unknown";
-
-      await showToast({
-        style: Toast.Style.Failure,
-        title: "Move Option Not Found",
-        message: `Window menu items found: ${menuItems}
-
-This likely means:
-1. Mission Control settings need adjustment:
-   System Settings → Desktop & Dock → Mission Control
-   → Enable "Displays have separate Spaces"
-2. Or manually move: Open Mission Control (F3) → Drag window to Desktop ${desktopNum}`,
+        title: "Invalid Desktop Number",
+        message: "Desktop number must be between 1 and 9",
       });
     } else {
-      // Unknown error - show the actual result for debugging
+      // Unknown error - likely the keyboard shortcut didn't work
       await showToast({
         style: Toast.Style.Failure,
-        title: "Unknown Error",
-        message: `AppleScript returned: ${result}
+        title: "Move Failed - Setup Required",
+        message: `Enable Mission Control keyboard shortcuts:
 
-Please report this issue with details about:
-- Which app you were moving
-- Your macOS version
-- Whether Desktop ${desktopNum} exists`,
+1. System Settings → Keyboard
+2. Keyboard Shortcuts → Mission Control
+3. Enable: "Move window to Desktop ${desktopNum}"
+   (or enable all "Move window to Desktop 1, 2, 3...")
+
+Then create Desktop ${desktopNum} if it doesn't exist:
+- Open Mission Control (F3)
+- Hover top-right → Click +
+
+Alternative: Manually drag window in Mission Control`,
       });
     }
   } catch (error) {
