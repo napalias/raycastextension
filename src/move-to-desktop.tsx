@@ -60,8 +60,8 @@ tell application "System Events"
     -- (more than enough to reach desktop 1 from any desktop)
     repeat 10 times
         tell application "System Events"
-            -- Control + Left Arrow = move window one space left
-            key code 123 using {control down}
+            -- Control + Shift + Left Arrow = move window one space left
+            key code 123 using {control down, shift down}
         end tell
         delay 0.15
     end repeat
@@ -70,8 +70,8 @@ tell application "System Events"
     if targetDesktop > 1 then
         repeat (targetDesktop - 1) times
             tell application "System Events"
-                -- Control + Right Arrow = move window one space right
-                key code 124 using {control down}
+                -- Control + Shift + Right Arrow = move window one space right
+                key code 124 using {control down, shift down}
             end tell
             delay 0.15
         end repeat
@@ -116,9 +116,9 @@ end tell
 
 1. System Settings → Keyboard → Keyboard Shortcuts
 2. Click "Mission Control" on the left
-3. Enable these (with default shortcuts):
-   ✅ Move left a space (^←)
-   ✅ Move right a space (^→)
+3. Enable these shortcuts:
+   ✅ Move window left a space (^⇧←)
+   ✅ Move window right a space (^⇧→)
 
 Then create Desktop ${desktopNum} if it doesn't exist:
 - Open Mission Control (F3)
@@ -157,7 +157,7 @@ Trying to move window to Desktop ${desktopNum}. Make sure:
 1. Desktop ${desktopNum} exists (check Mission Control - press F3)
 2. Keyboard shortcuts are enabled:
    System Settings → Keyboard → Keyboard Shortcuts → Mission Control
-   → Enable "Move left a space" and "Move right a space"
+   → Enable "Move window left a space" and "Move window right a space"
 3. Raycast has Accessibility permissions`;
     }
 
