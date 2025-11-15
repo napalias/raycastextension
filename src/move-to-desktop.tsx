@@ -82,9 +82,17 @@ tell application "System Events"
                                     end if
                                 end repeat
 
+                                -- Desktop not found - list what's available for debugging
+                                set availableDesktops to ""
+                                repeat with menuItem in menu items of menu 1 of menu item "Assign To"
+                                    try
+                                        set availableDesktops to availableDesktops & (name of menuItem) & "|"
+                                    end try
+                                end repeat
+
                                 -- Desktop not found
                                 key code 53 -- Escape to close menus
-                                return "error:desktop_not_found"
+                                return "error:desktop_not_found|" & availableDesktops
                             end tell
                         else
                             key code 53
@@ -122,16 +130,23 @@ end tell
         title: "No Window Found",
         message: "The frontmost app has no windows to move",
       });
-    } else if (result === "error:desktop_not_found") {
+    } else if (result.startsWith("error:desktop_not_found")) {
+      const parts = result.split("|");
+      const availableDesktops = parts.length > 1 ? parts.slice(1).join(", ") : "unknown";
+
       await showToast({
         style: Toast.Style.Failure,
         title: "Desktop Not Found",
         message: `Desktop ${desktopNum} not found in Dock menu.
 
-Create Desktop ${desktopNum}:
+Available options in "Assign To" menu:
+${availableDesktops}
+
+To fix:
 1. Open Mission Control (F3 or swipe up)
 2. Hover top-right corner → Click +
-3. Create desktops until you have Desktop ${desktopNum}`,
+3. Create Desktop ${desktopNum}
+4. Make sure "Displays have separate Spaces" is enabled in System Settings → Desktop & Dock`,
       });
     } else if (result === "error:no_assign_to") {
       await showToast({
