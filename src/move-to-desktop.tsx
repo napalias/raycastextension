@@ -31,8 +31,8 @@ export default async function Command(
       message: `Moving to Desktop ${desktopNum}...`,
     });
 
-    // Use keyboard shortcuts to move window to virtual desktop
-    // This requires Mission Control keyboard shortcuts to be enabled
+    // Use keyboard shortcuts to move window left/right between desktops
+    // This uses "Move window one space left/right" shortcuts
     const appleScript = `
 tell application "System Events"
     -- Get frontmost application and window
@@ -53,26 +53,32 @@ tell application "System Events"
 
     delay 0.2
 
-    -- Use keyboard shortcut: Control + Option + Desktop Number
-    -- This requires "Move window to Desktop X" to be enabled in:
-    -- System Settings → Keyboard → Keyboard Shortcuts → Mission Control
+    -- Strategy: Move to Desktop 1 first (by going left repeatedly)
+    -- Then move right (targetDesktop - 1) times
 
-    -- Key codes for numbers: 1=18, 2=19, 3=20, 4=21, 5=23, 6=22, 7=26, 8=28, 9=25
-    set keyCodes to {18, 19, 20, 21, 23, 22, 26, 28, 25}
-
-    if targetDesktop ≥ 1 and targetDesktop ≤ 9 then
-        set theKeyCode to item targetDesktop of keyCodes
-
-        -- Press Control + Option + Number to move window
+    -- Move to Desktop 1 by pressing left arrow 10 times
+    -- (more than enough to reach desktop 1 from any desktop)
+    repeat 10 times
         tell application "System Events"
-            key code theKeyCode using {control down, option down}
+            -- Control + Left Arrow = move window one space left
+            key code 123 using {control down}
         end tell
+        delay 0.15
+    end repeat
 
-        delay 0.3
-        return "success"
-    else
-        return "error:invalid_desktop"
+    -- Now we're at Desktop 1, move right to target desktop
+    if targetDesktop > 1 then
+        repeat (targetDesktop - 1) times
+            tell application "System Events"
+                -- Control + Right Arrow = move window one space right
+                key code 124 using {control down}
+            end tell
+            delay 0.15
+        end repeat
     end if
+
+    delay 0.3
+    return "success"
 end tell
 `;
 
@@ -108,14 +114,15 @@ end tell
         title: "Move Failed - Setup Required",
         message: `Enable Mission Control keyboard shortcuts:
 
-1. System Settings → Keyboard
-2. Keyboard Shortcuts → Mission Control
-3. Enable: "Move window to Desktop ${desktopNum}"
-   (or enable all "Move window to Desktop 1, 2, 3...")
+1. System Settings → Keyboard → Keyboard Shortcuts
+2. Click "Mission Control" on the left
+3. Enable these (with default shortcuts):
+   ✅ Move left a space (^←)
+   ✅ Move right a space (^→)
 
 Then create Desktop ${desktopNum} if it doesn't exist:
 - Open Mission Control (F3)
-- Hover top-right → Click +
+- Hover top-right → Click + to create desktops
 
 Alternative: Manually drag window in Mission Control`,
       });
@@ -147,8 +154,10 @@ System Settings → Privacy & Security → Accessibility → Enable Raycast`;
       userMessage = `Error: ${errorMessage}
 
 Trying to move window to Desktop ${desktopNum}. Make sure:
-1. Desktop ${desktopNum} exists (check Mission Control)
-2. The app has a Window menu
+1. Desktop ${desktopNum} exists (check Mission Control - press F3)
+2. Keyboard shortcuts are enabled:
+   System Settings → Keyboard → Keyboard Shortcuts → Mission Control
+   → Enable "Move left a space" and "Move right a space"
 3. Raycast has Accessibility permissions`;
     }
 
